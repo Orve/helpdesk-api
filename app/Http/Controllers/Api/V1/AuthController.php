@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use App\Models\User;
 
 class AuthController extends Controller
@@ -29,31 +31,33 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string']
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $data['email'])->first();
+        $credentials = $request->only('email', 'password');
 
-        if (!$user || !Hash::check($data['password'], $user->password)) {
-            return response()->json(['message' => 'Invalid credentials'], 422);
+        if (!Auth::attempt($credentials)) {
+            return response()->json([
+                'message' => 'Invalid credentials'
+            ], 422);
         }
 
-        // Laravel Sanctum のトークン認証用
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // 🔥 これ、絶対必要！！！！！！
+        $request->session()->regenerate();
 
         return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user,
+            'message' => 'Logged in',
+            'user' => $request->user(),
         ]);
     }
 
 
     public function logout(Request $request)
     {
-        auth()->logout();
+        Auth::guard('web')->logout();
+
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
@@ -62,6 +66,8 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        return response()->json(['user' => $request->user()]);
+        return response()->json([
+            'user' => $request->user(),
+        ]);
     }
 }
